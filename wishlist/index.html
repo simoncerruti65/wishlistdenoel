@@ -58,8 +58,13 @@
     </nav>
 
     <div id="list-tools" class="list-tools">
-      <label>Trier <select id="sort-select"></select></label>
-      <label>Thème <select id="theme-select"></select></label>
+      <label id="sort-label">Trier <select id="sort-select"></select></label>
+      <label id="theme-label">Thème <select id="theme-select"></select></label>
+      <div class="currency-toggle" role="group" aria-label="Devise">
+        <button type="button" data-currency="EUR" aria-pressed="true">€</button>
+        <button type="button" data-currency="SGD" aria-pressed="false">S$</button>
+      </div>
+      <p id="rate-note" class="hint rate-note" hidden></p>
     </div>
 
     <section id="view-mine" class="view"></section>
