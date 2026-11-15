@@ -3,7 +3,16 @@ import { CURRENCY, FAMILY_ID } from "./config.js";
 
 const $ = (sel) => document.querySelector(sel);
 const ME_KEY = `wishlist:${FAMILY_ID}:me`;
-const money = new Intl.NumberFormat("fr-FR", { style: "currency", currency: CURRENCY });
+// Prices are stored in euros. They can be shown in euros or Singapore
+// dollars, converted at the day's reference rate (see loadRate below).
+const fmtEUR = new Intl.NumberFormat("fr-FR", { style: "currency", currency: CURRENCY });
+const fmtSGD = new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+let showIn = "EUR";
+let sgdRate = null; // 1 EUR = sgdRate SGD
+let rateDate = "";
+const money = {
+  format: (eur) => (showIn === "SGD" && sgdRate ? `${fmtSGD.format(eur * sgdRate)} S$` : fmtEUR.format(eur)),
+};
 
 let store;
 let state = { members: {}, lists: {}, items: {}, claims: {} };
@@ -44,10 +53,10 @@ const THEMES = [
 ];
 const THEME_LABEL = Object.fromEntries(THEMES);
 const SORTS = [
-  ["added", "Ordre d'ajout"], ["price-asc", "Prix croissant"], ["price-desc", "Prix décroissant"],
+  ["price-asc", "Prix croissant"], ["added", "Ordre d'ajout"], ["price-desc", "Prix décroissant"],
   ["az", "Nom A → Z"], ["za", "Nom Z → A"],
 ];
-let sortBy = safeGet("wishlist:sort") || "added";
+let sortBy = safeGet("wishlist:sort2") || "price-asc";
 let themeFilter = "";
 const hasPrice = (it) => it.price !== "" && it.price != null && !isNaN(it.price);
 function sortItems(entries) {
@@ -63,8 +72,15 @@ function sortItems(entries) {
 const shownItems = (listId) => sortItems(itemsOf(listId).filter(([, it]) => !themeFilter || (it.tags || []).includes(themeFilter)));
 const tagChips = (tags = []) => tags.filter((t) => THEME_LABEL[t]).map((t) => `<span class="tag theme">${THEME_LABEL[t]}</span>`).join("");
 function renderTools() {
-  const tools = $("#list-tools");
-  tools.hidden = view === "gifting";
+  const onGifting = view === "gifting";
+  $("#sort-label").hidden = onGifting;
+  $("#theme-label").hidden = onGifting;
+  document.querySelectorAll("[data-currency]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.currency === showIn)));
+  const note = $("#rate-note");
+  note.hidden = showIn !== "SGD";
+  note.textContent = sgdRate
+    ? `1 € = ${sgdRate.toFixed(4).replace(".", ",")} S$${rateDate ? ` (taux du ${rateDate})` : ""}`
+    : "Taux en cours de chargement… En attendant, les prix restent en euros.";
   const sel = $("#sort-select");
   if (!sel.options.length) {
     sel.innerHTML = SORTS.map(([k, l]) => `<option value="${k}">${l}</option>`).join("");
@@ -378,6 +394,13 @@ function openItemDialog(listId, itemId) {
 }
 
 document.addEventListener("click", (e) => {
+  const cur = e.target.closest("[data-currency]");
+  if (cur) {
+    showIn = cur.dataset.currency;
+    safeSet("wishlist:currency", showIn);
+    if (showIn === "SGD" && !sgdRate) loadRate().then(render);
+    return render();
+  }
   const btn = e.target.closest("[data-action], .tab, #switch-user, #item-cancel, #photo-remove");
   if (!btn) return;
   if (btn.classList.contains("tab")) { view = btn.dataset.view; return render(); }
@@ -432,7 +455,7 @@ document.addEventListener("input", (e) => {
 });
 
 document.addEventListener("change", async (e) => {
-  if (e.target.id === "sort-select") { sortBy = e.target.value; safeSet("wishlist:sort", sortBy); return render(); }
+  if (e.target.id === "sort-select") { sortBy = e.target.value; safeSet("wishlist:sort2", sortBy); return render(); }
   if (e.target.id === "theme-select") { themeFilter = e.target.value; return render(); }
   if (e.target.name === "imageUrl") {
     const v = e.target.value.trim();
@@ -506,6 +529,7 @@ document.addEventListener("submit", (e) => {
     if (safeGet("wishlist:storySeen")) story.open = false;
     safeSet("wishlist:storySeen", "1");
   }
+  if (safeGet("wishlist:currency") === "SGD") { showIn = "SGD"; loadRate().then(render); }
   store.subscribe((s) => { state = s; render(); });
   await translateOriginalGifts();
   await tagOriginalGifts();
@@ -561,5 +585,36 @@ async function tagOriginalGifts() {
     if (it.tags !== undefined) continue;
     const hit = ORIGINAL_TAGS.find(([re]) => re.test(it.title || ""));
     if (hit) await store.updateItem(id, { tags: hit[1] }).catch(() => {});
+  }
+}
+
+// Euro to Singapore dollar reference rate: the European Central Bank's daily
+// rate (via Frankfurter), or open.er-api.com as a backup. Both are free and
+// need no key. Kept on the device for 12 hours.
+async function loadRate() {
+  try {
+    const cached = JSON.parse(safeGet("wishlist:sgdRate") || "null");
+    if (cached && Date.now() - cached.at < 12 * 3600e3) { sgdRate = cached.rate; rateDate = cached.date; return; }
+  } catch { /* ignore */ }
+  const sources = [
+    async () => {
+      const j = await (await fetch("https://api.frankfurter.app/latest?from=EUR&to=SGD")).json();
+      return { rate: j.rates?.SGD, date: (j.date || "").split("-").reverse().join("/") };
+    },
+    async () => {
+      const j = await (await fetch("https://open.er-api.com/v6/latest/EUR")).json();
+      const d = new Date(j.time_last_update_unix * 1000);
+      return { rate: j.rates?.SGD, date: isNaN(d) ? "" : d.toLocaleDateString("fr-FR") };
+    },
+  ];
+  for (const get of sources) {
+    try {
+      const { rate, date } = await get();
+      if (rate > 0) {
+        sgdRate = rate; rateDate = date;
+        safeSet("wishlist:sgdRate", JSON.stringify({ rate, date, at: Date.now() }));
+        return;
+      }
+    } catch { /* try the next source */ }
   }
 }
