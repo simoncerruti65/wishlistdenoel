@@ -1,5 +1,5 @@
 import { createStore, TakenError } from "./store.js";
-import { CURRENCY, FAMILY_ID } from "./config.js";
+import { CURRENCY, FAMILY_ID, HIDDEN_BETWEEN } from "./config.js";
 
 const $ = (sel) => document.querySelector(sel);
 const ME_KEY = `wishlist:${FAMILY_ID}:me`;
@@ -88,6 +88,15 @@ function renderTools() {
   }
   sel.value = sortBy;
   $("#theme-select").value = themeFilter;
+}
+// Visibility rules from config.js (HIDDEN_BETWEEN).
+const nameKey = (n) => (n || "").trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+function canSeeListsOf(viewer, owner) {
+  const v = nameKey(viewer), o = nameKey(owner);
+  return !(HIDDEN_BETWEEN || []).some(([a, b]) => {
+    const inA = (n) => a.some((x) => nameKey(x) === n), inB = (n) => b.some((x) => nameKey(x) === n);
+    return (inA(v) && inB(o)) || (inB(v) && inA(o));
+  });
 }
 const sameName = (a, b) => a?.trim().toLowerCase() === b?.trim().toLowerCase();
 
@@ -192,7 +201,7 @@ function itemInfo(it) {
 }
 
 function renderFamily() {
-  const owners = memberNames().filter((n) => !sameName(n, me));
+  const owners = memberNames().filter((n) => !sameName(n, me) && canSeeListsOf(me, n));
   const blocks = owners.flatMap((owner) => listsOf(owner).map(([id, l]) => {
     const all = itemsOf(id);
     const items = shownItems(id);

@@ -29,6 +29,15 @@ export const FAMILY_ID = "family-835f49be";
 // Currency used to display prices.
 export const CURRENCY = "EUR";
 
+// Who can't see whose lists, in "La famille". Each rule is two groups of
+// first names: nobody in one group sees the lists of anyone in the other,
+// in either direction. Everyone else sees everyone. Names are matched
+// ignoring capitals and accents, so "poupou" and "Poupou" are the same.
+// This only hides lists on screen: it is not a password.
+export const HIDDEN_BETWEEN = [
+  [["Poupou", "Grandma"], ["Fadou", "Dadou"]],
+];
+
 // Seeded on first run when there are no lists yet. Edit freely in the app.
 export const SEED = {
   owner: "Simon",
