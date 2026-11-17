@@ -1,5 +1,5 @@
 import { createStore, TakenError } from "./store.js";
-import { CURRENCY, FAMILY_ID, HIDDEN_BETWEEN } from "./config.js";
+import { CURRENCY, FAMILY, FAMILY_ID, HIDDEN_BETWEEN } from "./config.js";
 
 const $ = (sel) => document.querySelector(sel);
 const ME_KEY = `wishlist:${FAMILY_ID}:me`;
@@ -395,6 +395,7 @@ function openItemDialog(listId, itemId) {
   const tags = it.tags || [];
   f.querySelectorAll('input[name="tag"]').forEach((c) => { c.checked = tags.includes(c.value); });
   f.elements.imageUrl.value = it.image && !it.image.startsWith("data:") ? it.image : "";
+  f.elements.photo.value = "";
   showDialogImage(it.image);
   imageRemoved = false;
   $("#item-dialog-title").textContent = itemId ? "Modifier le cadeau" : "Ajouter un cadeau";
@@ -410,7 +411,7 @@ document.addEventListener("click", (e) => {
     if (showIn === "SGD" && !sgdRate) loadRate().then(render);
     return render();
   }
-  const btn = e.target.closest("[data-action], .tab, #switch-user, #item-cancel, #photo-remove");
+  const btn = e.target.closest("[data-action], .tab, #switch-user, #item-cancel, #photo-remove, #photo-paste");
   if (!btn) return;
   if (btn.classList.contains("tab")) { view = btn.dataset.view; return render(); }
   if (btn.id === "switch-user") { me = null; safeSet(ME_KEY, null); return render(); }
@@ -418,8 +419,10 @@ document.addEventListener("click", (e) => {
     imageRemoved = true;
     showDialogImage("");
     $("#item-form").elements.imageUrl.value = "";
+    $("#item-form").elements.photo.value = "";
     return;
   }
+  if (btn.id === "photo-paste") { pasteCopiedImage(); return; }
   if (btn.id === "item-cancel") { editing = null; return $("#item-dialog").close(); }
 
   const { action, list, item, name } = btn.dataset;
@@ -466,6 +469,10 @@ document.addEventListener("input", (e) => {
 document.addEventListener("change", async (e) => {
   if (e.target.id === "sort-select") { sortBy = e.target.value; safeSet("wishlist:sort2", sortBy); return render(); }
   if (e.target.id === "theme-select") { themeFilter = e.target.value; return render(); }
+  if (e.target.name === "photo" && e.target.files?.[0]) {
+    await usePhotoFile(e.target.files[0]);
+    return;
+  }
   if (e.target.name === "imageUrl") {
     const v = e.target.value.trim();
     if (!v || safeImg(v)) showDialogImage(v);
@@ -541,6 +548,7 @@ document.addEventListener("submit", (e) => {
   if (safeGet("wishlist:currency") === "SGD") { showIn = "SGD"; loadRate().then(render); }
   store.subscribe((s) => { state = s; render(); });
   await translateOriginalGifts();
+  await presetFamilyLetters();
   await tagOriginalGifts();
   fillMissingPictures();
 })();
@@ -625,5 +633,90 @@ async function loadRate() {
         return;
       }
     } catch { /* try the next source */ }
+  }
+}
+
+// ------------------------------------------------------------ photos
+// Shrink a photo so it stays small enough to store with the gift.
+function resizeImage(file, max = 480) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.width * scale);
+      c.height = Math.round(img.height * scale);
+      const ctx = c.getContext("2d");
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, c.width, c.height);
+      ctx.drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL("image/jpeg", 0.8));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Pas une image")); };
+    img.src = url;
+  });
+}
+
+async function usePhotoFile(blob) {
+  try {
+    showDialogImage(await resizeImage(blob));
+    imageRemoved = false;
+    $("#item-form").elements.imageUrl.value = "";
+  } catch { toast("Ce fichier n'est pas une image lisible. Essaie une autre photo."); }
+}
+
+// iPhone/iPad: long-press a picture in Safari, "Copier", then this button.
+// Works with a copied image or a copied image link.
+async function pasteCopiedImage() {
+  try {
+    if (navigator.clipboard?.read) {
+      for (const item of await navigator.clipboard.read()) {
+        const type = item.types.find((t) => t.startsWith("image/"));
+        if (type) return usePhotoFile(await item.getType(type));
+        if (item.types.includes("text/plain")) {
+          const text = (await (await item.getType("text/plain")).text()).trim();
+          if (safeImg(text)) return useImageLink(text);
+        }
+      }
+    } else if (navigator.clipboard?.readText) {
+      const text = (await navigator.clipboard.readText()).trim();
+      if (safeImg(text)) return useImageLink(text);
+    }
+    toast("Aucune image copiée. Appuie longuement sur la photo du produit, puis « Copier ».");
+  } catch {
+    toast("Ton navigateur n'a pas donné accès au presse-papiers. Utilise « Choisir une photo ».");
+  }
+}
+
+function useImageLink(url) {
+  $("#item-form").elements.imageUrl.value = url;
+  showDialogImage(url);
+  imageRemoved = false;
+}
+
+// A copied image pasted anywhere in the gift form also works (desktop).
+document.addEventListener("paste", (e) => {
+  if (!e.target.closest?.("#item-form")) return;
+  const file = [...(e.clipboardData?.files || [])].find((f) => f.type.startsWith("image/"));
+  if (file) { e.preventDefault(); usePhotoFile(file); }
+});
+
+// ------------------------------------------------------- family presets
+// Give each family member from config.js an empty letter, once. A member
+// who already exists (by name) is left alone, so a deleted letter is not
+// recreated. Fixed ids mean two phones doing this at once write the same
+// documents instead of duplicates.
+async function presetFamilyLetters() {
+  const known = new Set(memberNames().map(nameKey));
+  for (const name of FAMILY || []) {
+    const key = nameKey(name);
+    if (!key || known.has(key)) continue;
+    const id = key.replace(/[^a-z0-9]+/g, "-");
+    try {
+      await store.addMember(name, `preset-${id}`);
+      await store.addList(name, `Noël de ${name}`, "Noël", `preset-${id}`);
+    } catch (e) { console.warn("preset", name, e); }
   }
 }

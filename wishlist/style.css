@@ -210,3 +210,13 @@ select {
 .currency-toggle button { background: transparent; color: var(--muted); border-radius: 0; padding: 6px 12px; font-weight: 600; }
 .currency-toggle button[aria-pressed="true"] { background: var(--pine); color: var(--pine-text); }
 .rate-note { flex-basis: 100%; margin: -4px 0 0; }
+
+/* Photo buttons in the gift form */
+.photo-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
+.photo-actions > * { flex: 1 1 160px; text-align: center; }
+.file-pick {
+  display: inline-block; margin: 0; padding: 8px 14px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--line); color: var(--text); font-size: 1rem; position: relative;
+}
+.file-pick input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.photo-field .hint { margin: 0 0 10px; }

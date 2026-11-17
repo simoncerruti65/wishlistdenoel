@@ -48,9 +48,8 @@ class LocalStore {
   subscribe(cb) { this.listeners.add(cb); cb(this.read()); return () => this.listeners.delete(cb); }
 
   async init() { if (Object.keys(this.read().lists).length === 0) await seed(this); }
-  async addMember(name) { const id = uid(); this.write((s) => { s.members[id] = { name }; }); return id; }
-  async addList(owner, title, occasion) {
-    const id = uid();
+  async addMember(name, id = uid()) { this.write((s) => { s.members[id] = { name }; }); return id; }
+  async addList(owner, title, occasion, id = uid()) {
     this.write((s) => { s.lists[id] = { owner, title, occasion, createdAt: Date.now() }; });
     return id;
   }
@@ -122,10 +121,10 @@ class FirebaseStore {
     if (this.ready) cb(this.state);
     return () => this.listeners.delete(cb);
   }
-  async add(name, data) { const id = uid(); await this.fb.setDoc(this.ref(name, id), data); return id; }
+  async add(name, data, id = uid()) { await this.fb.setDoc(this.ref(name, id), data); return id; }
 
-  addMember(name) { return this.add("members", { name }); }
-  addList(owner, title, occasion) { return this.add("lists", { owner, title, occasion, createdAt: Date.now() }); }
+  addMember(name, id) { return this.add("members", { name }, id); }
+  addList(owner, title, occasion, id) { return this.add("lists", { owner, title, occasion, createdAt: Date.now() }, id); }
   updateList(id, patch) { return this.fb.updateDoc(this.ref("lists", id), patch); }
   async deleteList(id) {
     const batch = this.fb.writeBatch(this.db);

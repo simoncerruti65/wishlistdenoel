@@ -84,8 +84,13 @@
           <img alt="Photo du cadeau" />
           <button type="button" class="link danger" id="photo-remove">Retirer la photo</button>
         </div>
-        <label>Lien de l'image <input name="imageUrl" id="image-url" type="url" placeholder="https://…/photo.jpg" /></label>
-        <p class="hint">Sur la page de la boutique, appuie longuement sur la photo (ou clic droit) puis « Copier l'adresse de l'image », et colle-la ici.</p>
+        <div class="photo-actions">
+          <button type="button" class="secondary" id="photo-paste">📋 Coller l'image copiée</button>
+          <label class="secondary file-pick">📷 Choisir une photo<input name="photo" id="photo-input" type="file" accept="image/*" /></label>
+        </div>
+        <p class="hint">Sur iPhone : sur la page de la boutique, appuie longuement sur la photo, touche « Copier », puis « Coller l'image copiée ».
+        Ou fais une capture d'écran et choisis-la avec « Choisir une photo ».</p>
+        <label>Ou colle le lien de l'image <input name="imageUrl" id="image-url" type="url" placeholder="https://…/photo.jpg" /></label>
       </fieldset>
       <fieldset class="theme-field">
         <legend>Thèmes (facultatif)</legend>
