@@ -39,7 +39,7 @@ export const CURRENCY = "EUR";
 export const FAMILY = ["Simon", "Alex", "Ari", "Joz", "Rox", "Poupou", "Grandma", "Fadou", "Dadou"];
 
 export const HIDDEN_BETWEEN = [
-  [["Poupou", "Grandma"], ["Fadou", "Dadou"]],
+  [["Poupou", "Grandma", "Margaux"], ["Fadou", "Dadou"]],
 ];
 
 // Seeded on first run when there are no lists yet. Edit freely in the app.
