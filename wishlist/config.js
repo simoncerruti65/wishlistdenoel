@@ -34,6 +34,10 @@ export const CURRENCY = "EUR";
 // in either direction. Everyone else sees everyone. Names are matched
 // ignoring capitals and accents, so "poupou" and "Poupou" are the same.
 // This only hides lists on screen: it is not a password.
+// Family members who get an empty letter ready for them, so they just
+// pick their name and fill it in. Someone already in the app is skipped.
+export const FAMILY = ["Simon", "Alex", "Ari", "Joz", "Rox", "Poupou", "Grandma", "Fadou", "Dadou"];
+
 export const HIDDEN_BETWEEN = [
   [["Poupou", "Grandma"], ["Fadou", "Dadou"]],
 ];
