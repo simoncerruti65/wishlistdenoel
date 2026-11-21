@@ -38,6 +38,12 @@ export const CURRENCY = "EUR";
 // pick their name and fill it in. Someone already in the app is skipped.
 export const FAMILY = ["Simon", "Alex", "Ari", "Joz", "Rox", "Poupou", "Grandma", "Fadou", "Dadou"];
 
+// Lists only some people may see: owner name -> who can see it. Anyone
+// not named here doesn't see that owner's lists in "La famille".
+export const VISIBLE_ONLY_TO = {
+  Paddy: ["Alex", "Simon", "Poupou", "Ari", "Joz", "Margaux"],
+};
+
 export const HIDDEN_BETWEEN = [
   [["Poupou", "Grandma", "Margaux"], ["Fadou", "Dadou"]],
 ];
