@@ -1,5 +1,5 @@
 import { createStore, TakenError } from "./store.js";
-import { CURRENCY, FAMILY, FAMILY_ID, HIDDEN_BETWEEN } from "./config.js";
+import { CURRENCY, FAMILY, FAMILY_ID, HIDDEN_BETWEEN, VISIBLE_ONLY_TO } from "./config.js";
 
 const $ = (sel) => document.querySelector(sel);
 const ME_KEY = `wishlist:${FAMILY_ID}:me`;
@@ -93,6 +93,8 @@ function renderTools() {
 const nameKey = (n) => (n || "").trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 function canSeeListsOf(viewer, owner) {
   const v = nameKey(viewer), o = nameKey(owner);
+  const only = Object.entries(VISIBLE_ONLY_TO || {}).find(([name]) => nameKey(name) === o);
+  if (only && !only[1].some((x) => nameKey(x) === v)) return false;
   return !(HIDDEN_BETWEEN || []).some(([a, b]) => {
     const inA = (n) => a.some((x) => nameKey(x) === n), inB = (n) => b.some((x) => nameKey(x) === n);
     return (inA(v) && inB(o)) || (inB(v) && inA(o));
