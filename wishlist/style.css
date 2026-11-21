@@ -220,3 +220,11 @@ select {
 }
 .file-pick input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .photo-field .hint { margin: 0 0 10px; }
+
+/* Alert in "Ma hotte" when a reserved gift was removed from its list */
+.removed-alert {
+  border: 2px solid var(--accent); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px;
+  background: color-mix(in srgb, var(--accent) 8%, var(--card));
+}
+.removed-alert p { margin: 0 0 8px; }
+.removed-alert strong { color: var(--accent); font-weight: 700; }

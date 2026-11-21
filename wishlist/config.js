@@ -41,7 +41,7 @@ export const FAMILY = ["Simon", "Alex", "Ari", "Joz", "Rox", "Poupou", "Grandma"
 // Lists only some people may see: owner name -> who can see it. Anyone
 // not named here doesn't see that owner's lists in "La famille".
 export const VISIBLE_ONLY_TO = {
-  Paddy: ["Alex", "Simon", "Poupou", "Ari", "Joz", "Margaux"],
+  Paddy: ["Alex", "Simon", "Poupou", "Ari", "Joz", "Margaux", "Grandma"],
 };
 
 export const HIDDEN_BETWEEN = [

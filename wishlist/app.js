@@ -133,11 +133,12 @@ function render() {
   document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.view === view));
   for (const v of ["mine", "family", "gifting"]) $(`#view-${v}`).hidden = v !== view;
   const mine = Object.entries(state.claims).filter(([id, c]) => c.by === me && state.items[id]);
-  $("#gifting-count").textContent = mine.length;
+  const removed = Object.entries(state.claims).filter(([id, c]) => c.by === me && c.removed && !state.items[id]);
+  $("#gifting-count").textContent = mine.length + removed.length;
   renderTools();
   if (view === "mine") renderMine();
   if (view === "family") renderFamily();
-  if (view === "gifting") renderGifting(mine);
+  if (view === "gifting") renderGifting(mine, removed);
 }
 
 function renderLogin() {
@@ -240,7 +241,14 @@ function renderFamily() {
     `<p class="card muted">Personne d'autre n'a encore écrit sa lettre. Envoie-leur le lien !</p>`);
 }
 
-function renderGifting(mine) {
+function renderGifting(mine, removed = []) {
+  const alerts = removed.map(([itemId, c]) => `
+    <div class="removed-alert" role="alert">
+      <p><strong>⚠️ ${esc(c.owner || "Quelqu'un")} a retiré « ${esc(c.title || "un cadeau")} » de sa liste.</strong>
+      ${fmtPrice(c.price) ? `<span>(${fmtPrice(c.price)})</span>` : ""}
+      Si tu ne l'as pas encore acheté, ne l'achète pas. Sinon, parles-en avec ${esc(c.owner || "lui ou elle")}.</p>
+      <button class="secondary" data-action="dismiss-removed" data-item="${itemId}">OK, compris</button>
+    </div>`).join("");
   let total = 0;
   const rows = mine.map(([itemId]) => {
     const it = state.items[itemId];
@@ -252,6 +260,7 @@ function renderGifting(mine) {
   });
   setHtml($("#view-gifting"), `
     <article class="card">
+      ${alerts}
       <div class="list-head"><h2>Ma hotte de lutin</h2><strong>${money.format(total)}</strong></div>
       <ul class="items">${rows.join("") || `<li class="empty">Ta hotte est vide. Va voir « La famille » pour choisir un cadeau.</li>`}</ul>
     </article>`);
@@ -460,6 +469,7 @@ document.addEventListener("click", (e) => {
       });
     }
     case "unclaim": return run(async () => { await store.unclaim(item, me); toast("Cadeau libéré."); });
+    case "dismiss-removed": return run(() => store.unclaim(item, me));
   }
 });
 
