@@ -56,10 +56,10 @@ class LocalStore {
   async updateList(id, patch) { this.write((s) => { Object.assign(s.lists[id], patch); }); }
   async deleteList(id) {
     this.write((s) => {
-      delete s.lists[id];
       for (const [itemId, it] of Object.entries(s.items)) {
-        if (it.listId === id) { delete s.items[itemId]; delete s.claims[itemId]; }
+        if (it.listId === id) removeLocalItem(s, itemId);
       }
+      delete s.lists[id];
     });
   }
   async addItem(listId, data) {
@@ -68,7 +68,7 @@ class LocalStore {
     return id;
   }
   async updateItem(id, patch) { this.write((s) => { Object.assign(s.items[id], patch); }); }
-  async deleteItem(id) { this.write((s) => { delete s.items[id]; delete s.claims[id]; }); }
+  async deleteItem(id) { this.write((s) => removeLocalItem(s, id)); }
   async claim(itemId, by) {
     this.write((s) => {
       const existing = s.claims[itemId];
@@ -79,6 +79,21 @@ class LocalStore {
   async unclaim(itemId, by) {
     this.write((s) => { if (s.claims[itemId]?.by === by) delete s.claims[itemId]; });
   }
+}
+
+// What a reservation keeps when its gift is deleted from the owner's list.
+function removedClaim(item, list) {
+  return {
+    removed: true, removedAt: Date.now(),
+    title: item.title || "", price: item.price ?? "", image: item.image || "", link: item.link || "",
+    owner: list?.owner || "",
+  };
+}
+function removeLocalItem(s, id) {
+  const item = s.items[id];
+  if (s.claims[id] && item) Object.assign(s.claims[id], removedClaim(item, s.lists[item.listId]));
+  else delete s.claims[id];
+  delete s.items[id];
 }
 
 // ------------------------------------------------------------ Firebase mode
@@ -130,16 +145,24 @@ class FirebaseStore {
     const batch = this.fb.writeBatch(this.db);
     batch.delete(this.ref("lists", id));
     for (const [itemId, it] of Object.entries(this.state.items)) {
-      if (it.listId === id) { batch.delete(this.ref("items", itemId)); batch.delete(this.ref("claims", itemId)); }
+      if (it.listId === id) this.removeItemInBatch(batch, itemId);
     }
     await batch.commit();
+  }
+  // A reserved gift keeps its reservation, marked as removed with a copy of
+  // the gift, so the person who reserved it sees an alert in "Ma hotte".
+  removeItemInBatch(batch, id) {
+    const claim = this.state.claims[id];
+    const item = this.state.items[id];
+    batch.delete(this.ref("items", id));
+    if (claim && item) batch.set(this.ref("claims", id), removedClaim(item, this.state.lists[item.listId]), { merge: true });
+    else batch.delete(this.ref("claims", id));
   }
   addItem(listId, data) { return this.add("items", { listId, ...data, createdAt: Date.now() }); }
   updateItem(id, patch) { return this.fb.updateDoc(this.ref("items", id), patch); }
   async deleteItem(id) {
     const batch = this.fb.writeBatch(this.db);
-    batch.delete(this.ref("items", id));
-    batch.delete(this.ref("claims", id));
+    this.removeItemInBatch(batch, id);
     await batch.commit();
   }
   // Transaction: two people clicking "I'll gift this" at the same moment
