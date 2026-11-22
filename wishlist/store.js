@@ -10,7 +10,7 @@
 //
 // A claim is stored under the item's id, so an item can only ever have one.
 
-import { FIREBASE_CONFIG, FAMILY_ID, SEED } from "./config.js";
+import { FIREBASE_CONFIG, FAMILY_ID, SEED } from "./config.js?v=__BUILD__";
 
 const COLLECTIONS = ["members", "lists", "items", "claims"];
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);

@@ -26,6 +26,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+      # Stamp every file reference with this commit, so phones fetch the new
+      # files instead of reusing an old copy, and publish the version number
+      # the app checks to reload itself after an update.
+      - name: Stamp version
+        run: |
+          v="${GITHUB_SHA::8}"
+          sed -i "s/__BUILD__/$v/g" wishlist/index.html wishlist/app.js wishlist/store.js
+          echo "$v" > wishlist/version.txt
       - uses: actions/upload-pages-artifact@v3
         with:
           path: wishlist
