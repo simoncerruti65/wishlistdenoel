@@ -1,5 +1,5 @@
-import { createStore, TakenError } from "./store.js";
-import { CURRENCY, FAMILY, FAMILY_ID, HIDDEN_BETWEEN, VISIBLE_ONLY_TO } from "./config.js";
+import { createStore, TakenError } from "./store.js?v=__BUILD__";
+import { CURRENCY, FAMILY, FAMILY_ID, HIDDEN_BETWEEN, VISIBLE_ONLY_TO } from "./config.js?v=__BUILD__";
 
 const $ = (sel) => document.querySelector(sel);
 const ME_KEY = `wishlist:${FAMILY_ID}:me`;
@@ -732,3 +732,23 @@ async function presetFamilyLetters() {
     } catch (e) { console.warn("preset", name, e); }
   }
 }
+
+// --------------------------------------------------------- stay up to date
+// The publish step replaces BUILD with the commit id and writes it to
+// version.txt. When the published version differs from the one running
+// (a phone kept an old copy, or the page stayed open during an update),
+// reload once to pick up the new rules and screens.
+const BUILD = "__BUILD__";
+async function checkForUpdate() {
+  if (!/^[0-9a-f]{8}$/.test(BUILD)) return; // not a published build
+  try {
+    const res = await fetch(`version.txt?t=${Date.now()}`, { cache: "no-store" });
+    const live = (await res.text()).trim();
+    if (!/^[0-9a-f]{8}$/.test(live) || live === BUILD) return;
+    if (safeGet("wishlist:reloadedFor") === live) return; // don't loop if a cache still serves old files
+    safeSet("wishlist:reloadedFor", live);
+    location.reload();
+  } catch { /* offline: try again later */ }
+}
+checkForUpdate();
+document.addEventListener("visibilitychange", () => { if (!document.hidden) checkForUpdate(); });
