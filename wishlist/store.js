@@ -54,6 +54,7 @@ class LocalStore {
     return id;
   }
   async updateList(id, patch) { this.write((s) => { Object.assign(s.lists[id], patch); }); }
+  async updateMember(id, patch) { this.write((s) => { Object.assign(s.members[id], patch); }); }
   async deleteList(id) {
     this.write((s) => {
       for (const [itemId, it] of Object.entries(s.items)) {
@@ -141,6 +142,7 @@ class FirebaseStore {
   addMember(name, id) { return this.add("members", { name }, id); }
   addList(owner, title, occasion, id) { return this.add("lists", { owner, title, occasion, createdAt: Date.now() }, id); }
   updateList(id, patch) { return this.fb.updateDoc(this.ref("lists", id), patch); }
+  updateMember(id, patch) { return this.fb.updateDoc(this.ref("members", id), patch); }
   async deleteList(id) {
     const batch = this.fb.writeBatch(this.db);
     batch.delete(this.ref("lists", id));

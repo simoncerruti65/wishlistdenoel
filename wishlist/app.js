@@ -125,6 +125,7 @@ function setHtml(el, html) {
 function render() {
   if (pointerDown) { renderQueued = true; return; }
   renderQueued = false;
+  if (me && !isUnlocked(me)) { me = null; safeSet(ME_KEY, null); }
   $("#login").hidden = !!me;
   $("#app").hidden = !me;
   $("#whoami").hidden = !me;
@@ -276,9 +277,12 @@ async function run(fn) {
 
 // In-page replacement for confirm()/prompt(), which some embedded viewers block.
 // Resolves to true/false, or to the typed text when `input` is given (null on cancel).
-function ask({ title, input, ok = "OK" }) {
+function ask({ title, input, ok = "OK", secret = false }) {
   const d = $("#ask-dialog");
   const field = $("#ask-input");
+  field.type = secret ? "password" : "text";
+  field.inputMode = secret ? "numeric" : "text";
+  field.autocomplete = secret ? "off" : "on";
   $("#ask-title").textContent = title;
   $("#ask-ok").textContent = ok;
   field.hidden = input === undefined;
@@ -438,7 +442,7 @@ document.addEventListener("click", (e) => {
 
   const { action, list, item, name } = btn.dataset;
   switch (action) {
-    case "pick-me": me = name; safeSet(ME_KEY, me); view = "mine"; return render();
+    case "pick-me": return run(() => enterAs(name));
     case "add-item": return openItemDialog(list);
     case "edit-item": return openItemDialog(list, item);
     case "delete-item":
@@ -507,9 +511,7 @@ document.addEventListener("submit", (e) => {
     const existing = memberNames().find((n) => sameName(n, name));
     run(async () => {
       if (!existing) await store.addMember(name);
-      me = existing || name;
-      safeSet(ME_KEY, me);
-      render();
+      await enterAs(existing || name);
     });
   } else if (f.dataset.form === "new-list") {
     e.preventDefault();
@@ -561,6 +563,7 @@ document.addEventListener("submit", (e) => {
   store.subscribe((s) => { state = s; render(); });
   await translateOriginalGifts();
   await presetFamilyLetters();
+  if (me && !pinOf(me)) await enterAs(me);
   await tagOriginalGifts();
   fillMissingPictures();
 })();
@@ -752,3 +755,55 @@ async function checkForUpdate() {
 }
 checkForUpdate();
 document.addEventListener("visibilitychange", () => { if (!document.hidden) checkForUpdate(); });
+
+// ------------------------------------------------------------ secret codes
+// Each person protects their name with a code, so nobody else can open
+// their letter (and delete their gifts) by tapping their name. A device
+// remembers the code once entered. The code is stored only as a hash.
+// It keeps family members honest; it is not bank-level security.
+const UNLOCK_KEY = `wishlist:${FAMILY_ID}:unlocked`;
+const unlocked = () => { try { return JSON.parse(safeGet(UNLOCK_KEY) || "{}"); } catch { return {}; } };
+const memberDocs = (name) => Object.entries(state.members).filter(([, m]) => nameKey(m.name) === nameKey(name));
+const pinOf = (name) => memberDocs(name).map(([, m]) => m.pinHash).find(Boolean) || "";
+const isUnlocked = (name) => { const p = pinOf(name); return !p || unlocked()[nameKey(name)] === p; };
+function rememberUnlock(name, hash) {
+  const u = unlocked(); u[nameKey(name)] = hash; safeSet(UNLOCK_KEY, JSON.stringify(u));
+}
+async function hashPin(name, pin) {
+  const data = new TextEncoder().encode(`${FAMILY_ID}|${nameKey(name)}|${pin.trim()}`);
+  const buf = await crypto.subtle.digest("SHA-256", data);
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function enterAs(name) {
+  const existing = pinOf(name);
+  if (existing && unlocked()[nameKey(name)] !== existing) {
+    const pin = await ask({ title: `Code secret de ${name}`, input: "", ok: "Entrer", secret: true });
+    if (pin == null) return;
+    if ((await hashPin(name, pin)) !== existing) {
+      toast(`Code incorrect. Si tu as oublié ton code, demande à Simon.`);
+      return;
+    }
+    rememberUnlock(name, existing);
+  } else if (!existing) {
+    let pin = null;
+    while (pin == null || pin.trim().length < 4) {
+      pin = await ask({
+        title: `${name}, choisis un code secret (au moins 4 chiffres). Il protège ta lettre : personne d'autre ne pourra la modifier.`,
+        input: "", ok: "Enregistrer", secret: true,
+      });
+      if (pin == null) { me = null; safeSet(ME_KEY, null); render(); return; }
+      if (pin.trim().length < 4) toast("Au moins 4 chiffres, s'il te plaît.");
+    }
+    const hash = await hashPin(name, pin);
+    let docs = memberDocs(name);
+    if (!docs.length) { await store.addMember(name); docs = memberDocs(name); }
+    for (const [id] of docs) await store.updateMember(id, { pinHash: hash });
+    rememberUnlock(name, hash);
+    toast("C'est noté ! Retiens bien ton code 🤫");
+  }
+  me = name;
+  safeSet(ME_KEY, me);
+  view = "mine";
+  render();
+}
